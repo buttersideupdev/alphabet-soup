@@ -46,8 +46,8 @@
   const SNACK_EVERY = 10, SNACK_SPREAD = 2;  // so every 8th to 12th, at random
   const SNACK_QUIPS = ['just a taste!', 'oops, tasty!', 'nom nom', 'had to try one', 'mmm, crunchy',
                        'chef\'s privilege'];
-  const TIP_ANGLE = 105;               // degrees the pot turns when it's knocked over
-  const RIM_FROM_CORNER = { x: -32, y: -38 };   // middle of the rim from the pot's bottom-right corner
+  const TIP_ANGLE = 55;                // degrees the pot tips towards you when it's knocked over
+  const MOUTH_OPEN = 2.6;              // how much rounder the rim looks, fully tipped
   const STEAM_MS = 2000;               // how long a spilled character steams in the box
   const WISP = '<svg class="wisp" viewBox="0 0 20 30"><path d="M7 27 q-3 -5 0 -10 q3 -5 0 -10"/>' +
                '<path d="M13 27 q-3 -5 0 -10 q3 -5 0 -10"/></svg>';
@@ -105,9 +105,9 @@
     @keyframes blink { 0%, 94%, 100% { transform: scaleY(1); } 97% { transform: scaleY(.1); } }
 
     .pot { position: absolute; left: 3px; bottom: -2px; width: 64px; height: 90px; transform: translateY(${POT_HIDDEN}px); transform-origin: 50% 100%; pointer-events: auto; cursor: pointer; }
-    /* A knocked-over pot sticks out sideways, but stays behind the box's top edge. */
+    /* A knocked-over pot looms bigger as it tips towards you, but stays behind the box's top edge. */
     .stage.spilling .pot-slot { overflow: visible; clip-path: inset(-200px -200px 0 -200px); }
-    .soup { transform-box: fill-box; transform-origin: center; }
+    .soup, .rim { transform-box: fill-box; transform-origin: center; }
     .steam path, .wisp path { fill: none; stroke: #9a90a0; stroke-width: 2.5; stroke-linecap: round; opacity: 0; }
     .wisp { position: fixed; left: 0; top: 0; overflow: visible; }
     .wisp path { animation: steam 1s ease-out infinite; }
@@ -193,7 +193,7 @@
           <rect x="0" y="58" width="9" height="7" rx="3.5" fill="#3b404c" stroke="${LINE}" stroke-width="2"/>
           <rect x="55" y="58" width="9" height="7" rx="3.5" fill="#3b404c" stroke="${LINE}" stroke-width="2"/>
           <path d="M6 52 H58 V78 Q58 88 48 88 H16 Q6 88 6 78 Z" fill="#5b6272" stroke="${LINE}" stroke-width="2.5"/>
-          <ellipse cx="32" cy="52" rx="27" ry="6" fill="#3b404c" stroke="${LINE}" stroke-width="2.5"/>
+          <ellipse class="rim" cx="32" cy="52" rx="27" ry="6" fill="#3b404c" stroke="${LINE}" stroke-width="2.5"/>
           <ellipse class="soup" cx="32" cy="52" rx="22" ry="3.5" fill="#e8833a"/>
         </svg>
       </div>
@@ -268,6 +268,7 @@
     const face = $('.face');
     const pupils = [...root.querySelectorAll('.pupil')];
     const pot = $('.pot');
+    const rim = $('.rim');
     const soup = $('.soup');
     const bubble = $('.bubble');
     const lootLayer = $('.loot-layer');
@@ -700,7 +701,18 @@
 
     // --- the pot gets knocked over ------------------------------------------
 
-    const tilt = deg => `translate(32px, 0) rotate(${deg}deg) translate(-32px, 0)`;   // about the bottom-right corner
+    // Tips the pot towards you about its bottom edge, through each of `angles` in turn. The rim
+    // and soup get rounder as it tips, so you see into the pot.
+    function tip(angles, options) {
+      const turn = deg => `perspective(300px) rotateX(${-deg}deg)`;
+      const open = deg => `scaleY(${1 + (MOUTH_OPEN - 1) * Math.max(0, deg) / TIP_ANGLE})`;
+      return [
+        pot.animate(angles.map(deg => ({ transform: turn(deg) })), options),
+        rim.animate(angles.map(deg => ({ transform: open(deg) })), options),
+        soup.animate(angles.map(deg => ({ transform: open(deg) })), options),
+      ];
+    }
+    const allDone = animations => Promise.all(animations.map(a => a.finished));
 
     // Everything in the pot goes back in the box, in any order, and the chef starts again.
     async function spill() {
@@ -717,18 +729,13 @@
       announce(letters.length
         ? `The chef's pot tipped over, and ${letters.length} stolen characters spilled back into the box.`
         : 'The chef\'s pot tipped over, but it was empty.');
-      const r = pot.getBoundingClientRect(), unit = r.width / 64;
       stage.classList.add('spilling');
       pot.classList.remove('cooking');
-      const tipped = pot.animate([{ transform: tilt(0) }, { transform: tilt(TIP_ANGLE) }],
-                                 { duration: ms(300), easing: 'ease-in', fill: 'forwards' });
-      await tipped.finished;
+      const tipped = tip([0, TIP_ANGLE], { duration: ms(350), easing: 'ease-in', fill: 'forwards' });
+      await allDone(tipped);
 
-      const a = TIP_ANGLE * Math.PI / 180, { x, y } = RIM_FROM_CORNER;
-      const pour = {
-        x: r.right + (x * Math.cos(a) - y * Math.sin(a)) * unit,
-        y: r.bottom + (x * Math.sin(a) + y * Math.cos(a)) * unit,
-      };
+      const mouth = soup.getBoundingClientRect();
+      const pour = { x: mouth.left + mouth.width / 2, y: mouth.top + mouth.height / 2 };
       landing.index = indexUnder(pour.x);
       // Each one lands in the same spot, pushing the ones before it along.
       const stagger = reduceMotion ? 0 : Math.max(60, Math.min(160, 2400 / letters.length));
@@ -744,9 +751,8 @@
       }));
 
       await wait(ms(400));
-      await pot.animate([{ transform: tilt(TIP_ANGLE) }, { transform: tilt(-8) }, { transform: tilt(0) }],
-                        { duration: ms(450), easing: 'ease-out' }).finished;
-      tipped.cancel();
+      await allDone(tip([TIP_ANGLE, -8, 0], { duration: ms(450), easing: 'ease-out' }));
+      for (const animation of tipped) animation.cancel();
       stage.classList.remove('spilling');
       pot.classList.add('cooking');
       say('bon, from the top!');
@@ -760,7 +766,7 @@
       return tween(ms(450), t => {
         const p = charPoint(home.value, Math.min(landing.index, home.value.length));
         const at = lerp(start, p, t);
-        el.style.transform = `translate(${at.x}px, ${at.y - 40 * scale * 4 * t * (1 - t)}px) rotate(${t * 360}deg)`;
+        el.style.transform = `translate(${at.x}px, ${at.y - 12 * scale * 4 * t * (1 - t)}px) rotate(${t * 360}deg)`;
       }).then(() => el.remove());
     }
 
