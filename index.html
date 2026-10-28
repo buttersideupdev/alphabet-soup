@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Letter Thief: a chef who steals your letters</title>
+  <title>Alphabet Soup: a chef who steals your letters</title>
   <style>
     :root { --crust: #B5712E; --butter: #FFD84D; --ink: #3A2A1E; --paper: #FFFDF8; --page: #F6EEDF; }
     * { box-sizing: border-box; }
@@ -26,9 +26,9 @@
 </head>
 <body>
   <main>
-    <h1>Letter Thief</h1>
+    <h1>Alphabet Soup</h1>
     <p class="lede">Click a box and start typing. The chef will take the first of every letter and number for their soup.
-      Collect all 36 and they'll pack up and go.</p>
+      Collect all 36 and they'll pack up and go. Want your letters back? Click the pot.</p>
 
     <form class="card" onsubmit="return false">
       <div class="field">
@@ -45,13 +45,13 @@
       </div>
       <div class="field">
         <label for="secret">Secret family recipe <span class="hint">(marked off-limits)</span></label>
-        <textarea id="secret" data-letter-thief="off" placeholder="Nobody steals from Grandma."></textarea>
+        <textarea id="secret" data-alphabet-soup="off" placeholder="Nobody steals from Grandma."></textarea>
       </div>
-      <button type="button" onclick="LetterThief.reset()">Hire a new chef</button>
+      <button type="button" onclick="AlphabetSoup.reset()">Hire a new chef</button>
     </form>
 
     <footer>Made by <a href="https://buttersideup.dev">Butter Side Up</a>. Free to use under the MIT license.</footer>
   </main>
-  <script src="letter-thief.js"></script>
+  <script src="alphabet-soup.js"></script>
 </body>
 </html>

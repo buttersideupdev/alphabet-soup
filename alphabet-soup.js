@@ -1,23 +1,26 @@
 /*
- * Letter Thief
+ * Alphabet Soup
  * © 2026 Michael Phillipps / Butter Side Up (https://buttersideup.dev). MIT License.
  *
  * A chef who pops up over whichever text box you click, sets a soup pot down on its edge,
  * and steals the first of every letter and number you type, leaving a space where each one
  * was. Click another box and the chef
  * follows you there. Once all 36 are in the pot, the chef packs up and leaves for good.
+ * Now and then (about one in ten) the chef eats a character instead, so it has to be stolen again.
+ * Click the pot to tip it over: everything in it spills back into the box, steaming, and the
+ * chef starts collecting from scratch.
  *
- * Add it to any page:   <script src="letter-thief.js"></script>
+ * Add it to any page:   <script src="alphabet-soup.js"></script>
  *
  * - Works on <textarea> and on <input> boxes of type text, search, url and tel.
  *   Password, email and number boxes are left alone, and so is any box with
- *   data-letter-thief="off".
- * - Size: by default the chef grows with the box's text (16px text gets the drawing at 60%)
+ *   data-alphabet-soup="off".
+ * - Size: by default the chef grows with the box's text (16px text gets the drawing at about 41%)
  *   and shrinks to fit narrow boxes. To choose a size, add
  *   data-size="0.7" to the script tag (1 is the full drawing, 0.5 half, 1.5 bigger),
- *   or data-letter-thief-size="1.4" to one box. LetterThief.setSize(0.7) or
- *   LetterThief.setSize('auto') changes it while the page is open.
- * - LetterThief.reset() hires a new chef with an empty pot, even after the last one left.
+ *   or data-alphabet-soup-size="1.4" to one box. AlphabetSoup.setSize(0.7) or
+ *   AlphabetSoup.setSize('auto') changes it while the page is open.
+ * - AlphabetSoup.reset() hires a new chef with an empty pot, even after the last one left.
  * - Each theft is announced with a normal "input" event, so pages built with React,
  *   Vue and the like see the change. Screen readers hear it too ("The chef stole the letter E").
  * - Respects "reduce motion", and goes quiet when idle: no animation loop runs unless the
@@ -37,17 +40,26 @@
   const POT_HANDLE = { x: 4.5, y: 61.5 };   // left handle, in pot coordinates
   const POT_HIDDEN = 110;              // px below its spot on the edge, out of sight
   const POT_LIFT = -26;                // how high it's lifted before being set down
-  const QUIPS = ['oui!', 'magnifique!', 'for the soup!', 'ooh, a fresh one!', '*chef\'s kiss*',
+  const QUIPS = ['oui!', 'magnifique!', 'for the soup!', 'ooh, a fresh one!', 'chef\'s kiss',
                  'into the pot!', 'just what I needed', 'bon appétit!', 'délicieux!', 'merci!'];
-  // With size "auto" the chef grows with the box's text: 16px text gets the drawing at 60%.
-  const AUTO_TEXT_SIZE = 16, AUTO_SIZE_AT_TEXT_SIZE = .6;
-  const MIN_AUTO_SIZE = .3, MAX_AUTO_SIZE = 1.5;
+  // About one stolen character in this many gets eaten instead of going in the pot.
+  const SNACK_EVERY = 10, SNACK_SPREAD = 2;  // so every 8th to 12th, at random
+  const SNACK_QUIPS = ['just a taste!', 'oops, tasty!', 'nom nom', 'had to try one', 'mmm, crunchy',
+                       'chef\'s privilege'];
+  const TIP_ANGLE = 105;               // degrees the pot turns when it's knocked over
+  const RIM_FROM_CORNER = { x: -32, y: -38 };   // middle of the rim from the pot's bottom-right corner
+  const STEAM_MS = 2000;               // how long a spilled character steams in the box
+  const WISP = '<svg class="wisp" viewBox="0 0 20 30"><path d="M7 27 q-3 -5 0 -10 q3 -5 0 -10"/>' +
+               '<path d="M13 27 q-3 -5 0 -10 q3 -5 0 -10"/></svg>';
+  // With size "auto" the chef grows with the box's text: 16px text gets the drawing at about 41%.
+  const AUTO_TEXT_SIZE = 16, AUTO_SIZE_AT_TEXT_SIZE = .414;
+  const MIN_AUTO_SIZE = .2, MAX_AUTO_SIZE = .9;
 
   // Read now: the browser only says which script is running while this file first runs.
   let defaultSize = document.currentScript?.dataset.size || 'auto';
   let hireNewChef = () => {};          // set up once the page is ready
-  window.LetterThief = {
-    // 'auto', or a number where 1 is the normal size. A box's own data-letter-thief-size still wins.
+  window.AlphabetSoup = window.LetterThief = {     // LetterThief: the 1.x name, still answered to
+    // 'auto', or a number where 1 is the normal size. A box's own data-alphabet-soup-size still wins.
     setSize(size) { defaultSize = String(size); },
     // A fresh chef with an empty pot, even after the last one left for good.
     reset() { hireNewChef(); },
@@ -86,11 +98,21 @@
     .mouth-open { opacity: 0; }
     .stage.eager .mouth-open { opacity: 1; }
     .stage.eager .mouth-closed { opacity: 0; }
+    .mouth-open { transform-box: fill-box; transform-origin: center; }
+    .stage.chewing .mouth-open { opacity: 1; animation: chew .15s ease-in-out 6 alternate; }
+    .stage.chewing .mouth-closed { opacity: 0; }
+    @keyframes chew { to { transform: scaleY(.15); } }
     @keyframes blink { 0%, 94%, 100% { transform: scaleY(1); } 97% { transform: scaleY(.1); } }
 
-    .pot { position: absolute; left: 3px; bottom: -2px; width: 64px; height: 90px; transform: translateY(${POT_HIDDEN}px); transform-origin: 50% 100%; }
+    .pot { position: absolute; left: 3px; bottom: -2px; width: 64px; height: 90px; transform: translateY(${POT_HIDDEN}px); transform-origin: 50% 100%; pointer-events: auto; cursor: pointer; }
+    /* A knocked-over pot sticks out sideways, but stays behind the box's top edge. */
+    .stage.spilling .pot-slot { overflow: visible; clip-path: inset(-200px -200px 0 -200px); }
     .soup { transform-box: fill-box; transform-origin: center; }
-    .steam path { fill: none; stroke: #9a90a0; stroke-width: 2.5; stroke-linecap: round; opacity: 0; }
+    .steam path, .wisp path { fill: none; stroke: #9a90a0; stroke-width: 2.5; stroke-linecap: round; opacity: 0; }
+    .wisp { position: fixed; left: 0; top: 0; overflow: visible; }
+    .wisp path { animation: steam 1s ease-out infinite; }
+    .wisp path:nth-child(2) { animation-delay: .5s; }
+    @media (prefers-reduced-motion: reduce) { .wisp path { animation: none; opacity: .6; } }
     .pot.cooking .steam path { animation: steam 2.4s ease-out infinite; }
     .pot.cooking .steam path:nth-child(2) { animation-delay: .8s; }
     .pot.cooking .steam path:nth-child(3) { animation-delay: 1.6s; }
@@ -219,7 +241,7 @@
   }
 
   function isTextBox(el) {
-    if (!el || el.readOnly || el.disabled || el.dataset.letterThief === 'off') return false;
+    if (!el || el.readOnly || el.disabled || (el.dataset.alphabetSoup ?? el.dataset.letterThief) === 'off') return false;
     if (el instanceof HTMLTextAreaElement) return true;
     return el instanceof HTMLInputElement && BOX_TYPES.includes(el.type);
   }
@@ -231,10 +253,10 @@
   }
 
   function start() {
-    if (document.getElementById('letter-thief')) return;     // script included twice
+    if (document.getElementById('alphabet-soup')) return;     // script included twice
 
     const host = document.createElement('div');
-    host.id = 'letter-thief';
+    host.id = 'alphabet-soup';
     host.setAttribute('style', 'all: initial; position: fixed; left: 0; top: 0; width: 0; height: 0; z-index: 2147483000; pointer-events: none;');
     const root = host.attachShadow({ mode: 'open' });
     root.innerHTML = `<style>${STYLE}</style>${MARKUP}`;
@@ -261,9 +283,12 @@
     let lastValue = '';
     let targets = [];                  // characters waiting in the box, oldest first: { index, key, gone }
     const claimed = new Set();         // what the chef is going for or already has
-    const collected = new Set();
+    const collected = new Map();       // what's in the pot: lower-case key -> the character as typed
+    let wisps = [];                    // spilled characters still steaming in the box: { index, gone, el, until }
+    const landing = { index: 0 };      // where the next spilled character goes into the box
     let busy = false, finished = false;
     let introduced = false;            // screen readers hear who the chef is on the first arrival
+    let untilSnack = nextSnack();      // thefts left before the chef eats one
     let scale = 1;                     // the chef's size on the current box
     let lastQuip = '', bubbleTimer, duckTimer;
 
@@ -280,7 +305,7 @@
       startTracking();
       chain = chain.then(async () => {
         try { await task(); }
-        catch (err) { console.error('[letter-thief]', err); }
+        catch (err) { console.error('[alphabet-soup]', err); }
         finally {
           busy = --queued > 0;
           if (!busy && home && !finished) followCaret();
@@ -310,12 +335,23 @@
       });
     }
 
+    let spillQueued = false;
+
+    function requestSpill() {
+      if (spillQueued || !home || finished || !pot.classList.contains('cooking')) return;
+      spillQueued = true;
+      schedule(async () => {
+        spillQueued = false;
+        if (home && !finished && pot.classList.contains('cooking')) await spill();
+      });
+    }
+
     // --- where things are ---------------------------------------------------
 
     // A number from the box or the script tag wins. Otherwise the chef is sized to the box's text,
     // and shrunk if the box is too narrow for chef and pot.
     function sizeFor(box, width) {
-      const chosen = parseFloat(box.dataset.letterThiefSize || defaultSize);
+      const chosen = parseFloat(box.dataset.alphabetSoupSize || box.dataset.letterThiefSize || defaultSize);
       if (chosen > 0) return chosen;
       // A box removed from the page has no font size; keep the usual size until the chef moves on.
       const text = parseFloat(getComputedStyle(box).fontSize) || AUTO_TEXT_SIZE;
@@ -362,15 +398,44 @@
 
     const edgeTop = () => home.getBoundingClientRect().top;
 
-    function charPoint(text, index) {
-      const cs = getComputedStyle(home);
-      const singleLine = home instanceof HTMLInputElement;
+    // An invisible copy of the box, laid out the same way, for finding where characters sit.
+    function mirrorOf(cs) {
       const mirror = document.createElement('div');
       for (const p of MIRRORED) mirror.style[p] = cs[p];
       Object.assign(mirror.style, {
         position: 'absolute', top: '0', left: '-9999px', visibility: 'hidden',
-        whiteSpace: singleLine ? 'pre' : 'pre-wrap', overflowWrap: 'break-word', overflow: 'hidden',
+        whiteSpace: home instanceof HTMLInputElement ? 'pre' : 'pre-wrap', overflowWrap: 'break-word', overflow: 'hidden',
       });
+      return mirror;
+    }
+
+    // The place in the box's top line of visible text that's nearest to `x` on screen.
+    function indexUnder(x) {
+      const cs = getComputedStyle(home);
+      const mirror = mirrorOf(cs);
+      const spans = [...home.value, ''].map(ch => {
+        const span = document.createElement('span');
+        span.textContent = ch;
+        return span;
+      });
+      mirror.append(...spans);
+      root.append(mirror);
+      const left = home.getBoundingClientRect().left + home.clientLeft - home.scrollLeft;
+      const visible = spans.filter(s => s.offsetTop + s.offsetHeight / 2 - home.scrollTop >= parseFloat(cs.paddingTop));
+      const lineTop = Math.min(...visible.map(s => s.offsetTop));
+      let best = home.value.length, bestDistance = Infinity;
+      spans.forEach((span, i) => {
+        const distance = Math.abs(left + span.offsetLeft - x);
+        if (Math.abs(span.offsetTop - lineTop) < 1 && distance < bestDistance) [best, bestDistance] = [i, distance];
+      });
+      mirror.remove();
+      return best;
+    }
+
+    function charPoint(text, index) {
+      const cs = getComputedStyle(home);
+      const singleLine = home instanceof HTMLInputElement;
+      const mirror = mirrorOf(cs);
       const marker = document.createElement('span');
       marker.style.display = 'inline-block';
       marker.textContent = text[index] || '';
@@ -424,6 +489,8 @@
       clearTimeout(bubbleTimer);
       bubbleTimer = setTimeout(() => bubble.classList.remove('show'), duration);
     }
+
+    const describe = ch => /\d/.test(ch) ? 'number ' + ch : 'letter ' + ch.toUpperCase();
 
     // What a screen reader user hears. Emptied first so the same words are read again.
     function announce(text) {
@@ -486,20 +553,38 @@
       home.dispatchEvent(new Event('input', { bubbles: true }));
     }
 
-    // Take the character out of the box and put it in the chef's hand.
-    function pluck(job) {
-      const ch = home.value[job.index];
-      if (!ch || ch.toLowerCase() !== job.key) return null;
-      const p = charPoint(home.value, job.index);
+    // Puts `text` into the box at `index`, moving the caret along if it's after that.
+    function insertAt(index, text) {
+      const v = home.value;
+      const { selectionStart, selectionEnd } = home;
+      const after = n => n >= index ? n + text.length : n;
+      setNativeValue(home, v.slice(0, index) + text + v.slice(index));
+      home.setSelectionRange(after(selectionStart), after(selectionEnd));
+      shiftMarks(index, index, text.length);
+      lastValue = home.value;
+      home.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
+    // A character drawn over the page in the box's font, for carrying around.
+    function lootFor(ch) {
       const cs = getComputedStyle(home);
       const el = document.createElement('span');
       el.className = 'loot';
       el.textContent = ch;
       for (const prop of LOOT_FONT) el.style[prop] = cs[prop];
       lootLayer.append(el);
+      return el;
+    }
+
+    // Take the character out of the box and put it in the chef's hand.
+    function pluck(job) {
+      const ch = home.value[job.index];
+      if (!ch || ch.toLowerCase() !== job.key) return null;
+      const p = charPoint(home.value, job.index);
+      const el = lootFor(ch);
       blankCharAt(job.index);
-      announce(`The chef stole the ${/\d/.test(ch) ? 'number ' + ch : 'letter ' + ch.toUpperCase()}.`);
-      const letter = { el, key: job.key, w: p.w, h: p.h };
+      announce(`The chef stole the ${describe(ch)}.`);
+      const letter = { el, ch, key: job.key, w: p.w, h: p.h };
       holdLetter(letter, { x: p.x + p.w / 2, y: p.y + p.h * .4 }, 0);
       return letter;
     }
@@ -514,8 +599,41 @@
         letter.el.remove();
         soup.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.12, 1.8)' }, { transform: 'scale(1)' }],
                      { duration: 300 });
-        collected.add(letter.key);
+        collected.set(letter.key, letter.ch);
         if (collected.size < WANTED.length) say();
+      });
+    }
+
+    function nextSnack() {
+      return SNACK_EVERY - SNACK_SPREAD + Math.floor(Math.random() * (2 * SNACK_SPREAD + 1));
+    }
+
+    function timeForASnack() {
+      if (--untilSnack > 0) return false;
+      untilSnack = nextSnack();
+      return true;
+    }
+
+    function mouth() {
+      const r = face.getBoundingClientRect();
+      return { x: r.left + r.width * 70 / 140, y: r.top + r.height * 128 / 150 };
+    }
+
+    // A snack: the character goes in the chef's mouth instead of the pot, so it doesn't count,
+    // and the next one of it you type gets stolen too.
+    function eat(letter) {
+      const { x, y } = letter.pos, m = mouth();
+      claimed.delete(letter.key);
+      say(SNACK_QUIPS[Math.floor(Math.random() * SNACK_QUIPS.length)], 1400);
+      announce(`The chef ate the ${describe(letter.ch)}, so they'll steal another one.`);
+      stage.classList.add('chewing');
+      return letter.el.animate([
+        { transform: `translate(${x}px, ${y}px) rotate(${letter.tilt}deg)`, opacity: 1 },
+        { transform: `translate(${m.x - letter.w / 2}px, ${m.y - letter.h * .4}px) scale(.2)`, opacity: 0 },
+      ], { duration: ms(200), easing: 'ease-in', fill: 'forwards' }).finished.then(async () => {
+        letter.el.remove();
+        await wait(reduceMotion ? 1 : 900);       // chewing
+        stage.classList.remove('chewing');
       });
     }
 
@@ -545,10 +663,11 @@
       targets = targets.filter(j => j !== job);
       if (!letter) say('hey!');             // you deleted it before the chef got there
 
-      // Up to the pot, or back empty-handed.
+      // Up to the pot (or, now and then, the chef's mouth), or back empty-handed.
+      const snack = letter && timeForASnack();
       const from = handAt;
       await tween(ms(letter ? 360 : 220), t => {
-        const to = letter ? aboveThePot(letter) : shoulder();
+        const to = !letter ? shoulder() : snack ? mouth() : aboveThePot(letter);
         handAt = lerp(from, to, easeInOut(t));
         drawArm(shoulder(), handAt, letter ? 1 : 0);
         if (letter) holdLetter(letter, handAt, t);
@@ -558,7 +677,7 @@
       if (letter) {
         const released = handAt;
         await Promise.all([
-          dropInPot(letter),
+          snack ? eat(letter) : dropInPot(letter),
           tween(ms(160), t => drawArm(shoulder(), lerp(released, shoulder(), easeInOut(t)), 0)),
         ]);
       }
@@ -577,6 +696,96 @@
         finished = true;
         await leaveForGood();
       }
+    }
+
+    // --- the pot gets knocked over ------------------------------------------
+
+    const tilt = deg => `translate(32px, 0) rotate(${deg}deg) translate(-32px, 0)`;   // about the bottom-right corner
+
+    // Everything in the pot goes back in the box, in any order, and the chef starts again.
+    async function spill() {
+      const letters = [...collected.values()];
+      for (let i = letters.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [letters[i], letters[j]] = [letters[j], letters[i]];
+      }
+      collected.clear();
+      claimed.clear();
+      for (const job of targets) claimed.add(job.key);
+
+      say('non! my soup!', 1800);
+      announce(letters.length
+        ? `The chef's pot tipped over, and ${letters.length} stolen characters spilled back into the box.`
+        : 'The chef\'s pot tipped over, but it was empty.');
+      const r = pot.getBoundingClientRect(), unit = r.width / 64;
+      stage.classList.add('spilling');
+      pot.classList.remove('cooking');
+      const tipped = pot.animate([{ transform: tilt(0) }, { transform: tilt(TIP_ANGLE) }],
+                                 { duration: ms(300), easing: 'ease-in', fill: 'forwards' });
+      await tipped.finished;
+
+      const a = TIP_ANGLE * Math.PI / 180, { x, y } = RIM_FROM_CORNER;
+      const pour = {
+        x: r.right + (x * Math.cos(a) - y * Math.sin(a)) * unit,
+        y: r.bottom + (x * Math.sin(a) + y * Math.cos(a)) * unit,
+      };
+      landing.index = indexUnder(pour.x);
+      // Each one lands in the same spot, pushing the ones before it along.
+      const stagger = reduceMotion ? 0 : Math.max(60, Math.min(160, 2400 / letters.length));
+      let landed = Promise.resolve();
+      await Promise.all(letters.map((ch, i) => {
+        const flight = wait(i * stagger).then(() => fling(ch, pour));
+        return landed = Promise.all([flight, landed]).then(() => {
+          const at = Math.min(landing.index, home.value.length);
+          insertAt(at, ch);
+          landing.index = at;
+          steamOver(at);
+        });
+      }));
+
+      await wait(ms(400));
+      await pot.animate([{ transform: tilt(TIP_ANGLE) }, { transform: tilt(-8) }, { transform: tilt(0) }],
+                        { duration: ms(450), easing: 'ease-out' }).finished;
+      tipped.cancel();
+      stage.classList.remove('spilling');
+      pot.classList.add('cooking');
+      say('bon, from the top!');
+    }
+
+    // One character flies out of the tipped pot in an arc and lands in the box.
+    function fling(ch, from) {
+      const el = lootFor(ch);
+      const w = el.offsetWidth, h = el.offsetHeight;
+      const start = { x: from.x - w / 2, y: from.y - h / 2 };
+      return tween(ms(450), t => {
+        const p = charPoint(home.value, Math.min(landing.index, home.value.length));
+        const at = lerp(start, p, t);
+        el.style.transform = `translate(${at.x}px, ${at.y - 40 * scale * 4 * t * (1 - t)}px) rotate(${t * 360}deg)`;
+      }).then(() => el.remove());
+    }
+
+    // A little steam rises off a character that's just come out of the pot.
+    function steamOver(index) {
+      lootLayer.insertAdjacentHTML('beforeend', WISP);
+      wisps.push({ index, gone: false, el: lootLayer.lastElementChild, until: performance.now() + STEAM_MS });
+      if (wisps.length === 1) requestAnimationFrame(drawWisps);
+    }
+
+    function drawWisps(now) {
+      wisps = wisps.filter(wisp => {
+        if (wisp.gone || now > wisp.until || !home) { wisp.el.remove(); return false; }
+        const p = charPoint(home.value, wisp.index);
+        const w = p.h * .7;
+        Object.assign(wisp.el.style, { width: w + 'px', height: p.h + 'px' });
+        wisp.el.style.transform = `translate(${p.x + p.w / 2 - w / 2}px, ${p.y - p.h * .85}px)`;
+        return true;
+      });
+      if (wisps.length) requestAnimationFrame(drawWisps);
+    }
+
+    function clearWisps() {
+      for (const wisp of wisps) wisp.el.remove();
+      wisps = [];
     }
 
     // --- arriving, following and leaving ------------------------------------
@@ -611,6 +820,7 @@
     function settleOn(box) {
       for (const job of targets) claimed.delete(job.key);
       targets = [];
+      clearWisps();
       home = box;
       lastValue = box.value;
       boxWatcher.disconnect();
@@ -663,6 +873,16 @@
 
     // --- watching the box ---------------------------------------------------
 
+    // The text from `start` to `end` was replaced with `length` new characters: keep queued
+    // thefts, steaming characters and the spill's landing spot pointing at the right places.
+    function shiftMarks(start, end, length) {
+      for (const mark of [...targets, ...wisps, landing]) {
+        if (mark.index >= end) mark.index += length - (end - start);
+        else if (mark.index >= start) { mark.gone = true; mark.index = start; claimed.delete(mark.key); }
+      }
+      targets = targets.filter(job => !job.gone);
+    }
+
     // Work out what changed since last time so queued characters keep pointing at the right spot.
     function onEdit() {
       const before = lastValue, now = home.value;
@@ -673,11 +893,7 @@
       while (endBefore > start && endNow > start && before[endBefore - 1] === now[endNow - 1]) {
         endBefore--; endNow--;
       }
-      for (const job of targets) {
-        if (job.index >= endBefore) job.index += endNow - endBefore;
-        else if (job.index >= start) { job.gone = true; claimed.delete(job.key); }
-      }
-      targets = targets.filter(job => !job.gone);
+      shiftMarks(start, endBefore, endNow - start);
       let added = 0;
       for (let i = start; i < endNow; i++) {
         const key = now[i].toLowerCase();
@@ -710,10 +926,12 @@
       targets = [];
       claimed.clear();
       collected.clear();
+      clearWisps();
+      untilSnack = nextSnack();
       finished = introduced = false;
       home = nextHome = null;
       boxWatcher.disconnect();
-      stage.classList.remove('eager', 'reaching', 'ducking');
+      stage.classList.remove('eager', 'reaching', 'ducking', 'chewing', 'spilling');
       stage.classList.add('away');
       stage.style.display = 'none';
       reach.classList.remove('on');
@@ -728,6 +946,10 @@
       stage.classList.add('ducking');
       duckTimer = setTimeout(() => stage.classList.remove('ducking'), 1400);
     });
+
+    // Knock the pot over. Pressing on it mustn't take the focus away from the box.
+    pot.addEventListener('mousedown', e => e.preventDefault());
+    pot.addEventListener('click', requestSpill);
 
     if (isTextBox(document.activeElement)) requestMove(document.activeElement);
   }
