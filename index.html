@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Letter Thief: a chef who steals your letters</title>
+  <style>
+    :root { --crust: #B5712E; --butter: #FFD84D; --ink: #3A2A1E; --paper: #FFFDF8; --page: #F6EEDF; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--page); color: var(--ink); font: 17px/1.5 system-ui, -apple-system, sans-serif; }
+    main { max-width: 640px; margin: 0 auto; padding: 48px 16px 64px; }
+    h1 { font-size: 2.2rem; margin: 0 0 .25em; }
+    .lede { margin: 0 0 2.5rem; }
+    .card { background: var(--paper); border: 3px solid var(--crust); border-radius: 22px; padding: 28px 24px 24px; }
+    label { display: block; font-weight: 700; margin: 0 0 .3em; }
+    .field { margin-bottom: 4.5rem; }                  /* room for the chef above each box */
+    .field:last-of-type { margin-bottom: 1.5rem; }
+    .hint { font-weight: 400; font-size: .85em; opacity: .75; }
+    input, textarea { width: 100%; font: inherit; color: inherit; background: #fff; border: 2px solid #d9c6a8; border-radius: 12px; padding: 10px 12px; }
+    textarea { min-height: 7em; resize: vertical; }
+    input:focus, textarea:focus { outline: 3px solid var(--butter); outline-offset: 1px; border-color: var(--crust); }
+    button { font: inherit; font-weight: 700; color: var(--ink); background: var(--butter); border: 2px solid var(--ink); border-radius: 999px; padding: 10px 20px; cursor: pointer; }
+    footer { margin-top: 2rem; font-size: .9em; }
+    a { color: var(--crust); }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Letter Thief</h1>
+    <p class="lede">Click a box and start typing. The chef will take the first of every letter and number for their soup.
+      Collect all 36 and they'll pack up and go.</p>
+
+    <form class="card" onsubmit="return false">
+      <div class="field">
+        <label for="dish">Name of the dish</label>
+        <input id="dish" type="text" placeholder="Grandma's famous alphabet soup">
+      </div>
+      <div class="field">
+        <label for="ingredients">Ingredients</label>
+        <textarea id="ingredients" placeholder="2 carrots, 1 onion, 4 cups of stock…"></textarea>
+      </div>
+      <div class="field">
+        <label for="email">Your email <span class="hint">(the chef won't touch this one)</span></label>
+        <input id="email" type="email" placeholder="you@example.com">
+      </div>
+      <div class="field">
+        <label for="secret">Secret family recipe <span class="hint">(marked off-limits)</span></label>
+        <textarea id="secret" data-letter-thief="off" placeholder="Nobody steals from Grandma."></textarea>
+      </div>
+      <button type="button" onclick="LetterThief.reset()">Hire a new chef</button>
+    </form>
+
+    <footer>Made by <a href="https://buttersideup.dev">Butter Side Up</a>. Free to use under the MIT license.</footer>
+  </main>
+  <script src="letter-thief.js"></script>
+</body>
+</html>
