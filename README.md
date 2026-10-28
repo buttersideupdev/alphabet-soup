@@ -53,7 +53,8 @@ That's it. There are no dependencies, no build step and no styles to add.
 
 ## Demo
 
-Open `index.html` in a browser, or try it at [buttersideup.dev](https://buttersideup.dev).
+Try it live at **[buttersideupdev.github.io/letter-thief](https://buttersideupdev.github.io/letter-thief/)**, or open
+`index.html` in a browser.
 
 ## License
 
