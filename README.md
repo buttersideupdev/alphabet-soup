@@ -26,7 +26,7 @@ That's it. There are no dependencies, no build step and no styles to add.
 
 | Where | What |
 |---|---|
-| `data-size="0.7"` on the script tag | Chef size for the whole page (1 is normal, 0.5 half, 1.5 bigger). The default, `auto`, shrinks the chef to fit narrow boxes. |
+| `data-size="0.7"` on the script tag | Chef size for the whole page (1 is the full drawing, 0.5 half, 1.5 bigger). The default, `auto`, grows the chef with the box's text (16px text gets the drawing at 60%) and shrinks them to fit narrow boxes. |
 | `data-letter-thief-size="1.4"` on a box | Chef size on that one box |
 | `data-letter-thief="off"` on a box | Keep the chef away from it |
 | `LetterThief.setSize(0.7)` / `LetterThief.setSize('auto')` | Change the size while the page is open |

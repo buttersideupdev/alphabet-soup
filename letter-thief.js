@@ -12,8 +12,9 @@
  * - Works on <textarea> and on <input> boxes of type text, search, url and tel.
  *   Password, email and number boxes are left alone, and so is any box with
  *   data-letter-thief="off".
- * - Size: by default the chef shrinks to fit narrow boxes. To choose a size, add
- *   data-size="0.7" to the script tag (1 is normal, 0.5 is half size, 1.5 is bigger),
+ * - Size: by default the chef grows with the box's text (16px text gets the drawing at 60%)
+ *   and shrinks to fit narrow boxes. To choose a size, add
+ *   data-size="0.7" to the script tag (1 is the full drawing, 0.5 half, 1.5 bigger),
  *   or data-letter-thief-size="1.4" to one box. LetterThief.setSize(0.7) or
  *   LetterThief.setSize('auto') changes it while the page is open.
  * - LetterThief.reset() hires a new chef with an empty pot, even after the last one left.
@@ -38,8 +39,9 @@
   const POT_LIFT = -26;                // how high it's lifted before being set down
   const QUIPS = ['oui!', 'magnifique!', 'for the soup!', 'ooh, a fresh one!', '*chef\'s kiss*',
                  'into the pot!', 'just what I needed', 'bon appétit!', 'délicieux!', 'merci!'];
-  const AUTO_FIT_WIDTH = 400;          // with size "auto", boxes narrower than this get a smaller chef
-  const MIN_AUTO_SIZE = .5;
+  // With size "auto" the chef grows with the box's text: 16px text gets the drawing at 60%.
+  const AUTO_TEXT_SIZE = 16, AUTO_SIZE_AT_TEXT_SIZE = .6;
+  const MIN_AUTO_SIZE = .3, MAX_AUTO_SIZE = 1.5;
 
   // Read now: the browser only says which script is running while this file first runs.
   let defaultSize = document.currentScript?.dataset.size || 'auto';
@@ -310,10 +312,15 @@
 
     // --- where things are ---------------------------------------------------
 
-    // A number from the box or the script tag wins; otherwise shrink to fit narrow boxes.
+    // A number from the box or the script tag wins. Otherwise the chef is sized to the box's text,
+    // and shrunk if the box is too narrow for chef and pot.
     function sizeFor(box, width) {
       const chosen = parseFloat(box.dataset.letterThiefSize || defaultSize);
-      return chosen > 0 ? chosen : Math.max(MIN_AUTO_SIZE, Math.min(1, width / AUTO_FIT_WIDTH));
+      if (chosen > 0) return chosen;
+      // A box removed from the page has no font size; keep the usual size until the chef moves on.
+      const text = parseFloat(getComputedStyle(box).fontSize) || AUTO_TEXT_SIZE;
+      const byText = text / AUTO_TEXT_SIZE * AUTO_SIZE_AT_TEXT_SIZE;
+      return Math.max(MIN_AUTO_SIZE, Math.min(MAX_AUTO_SIZE, byText, width / SPAN_W));
     }
 
     // Pins the chef to the box's top edge. While the chef is busy or the box has focus this runs
