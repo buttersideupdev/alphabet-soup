@@ -25,7 +25,11 @@ That's it. There are no dependencies, no build step and no styles to add.
 
 - **Works on** `<textarea>` and `<input>` boxes of type `text`, `search`, `url` and `tel`.
 - **Never touches** password, email or number boxes, read-only or disabled boxes, or any box
-  marked `data-alphabet-soup="off"`.
+  marked `data-alphabet-soup="off"` (or inside something marked that way).
+- **Politely declines** boxes marked `data-alphabet-soup="decline"`, or inside something marked
+  that way, like a whole `<form>`. The first time you click into one, the chef comes over, sniffs,
+  says "off duty, this one's important" and leaves without stealing anything. After that the chef
+  leaves them alone until the page is reloaded. Handy for contact forms.
 
 ## Options
 
@@ -33,7 +37,8 @@ That's it. There are no dependencies, no build step and no styles to add.
 |---|---|
 | `data-size="0.7"` on the script tag | Chef size for the whole page (1 is the full drawing, 0.5 half, 1.5 bigger). The default, `auto`, grows the chef with the box's text (16px text gets the drawing at about 41%) and shrinks them to fit narrow boxes. |
 | `data-alphabet-soup-size="1.4"` on a box | Chef size on that one box |
-| `data-alphabet-soup="off"` on a box | Keep the chef away from it |
+| `data-alphabet-soup="off"` on a box or anything around it | Keep the chef away from it |
+| `data-alphabet-soup="decline"` on a box or anything around it | The chef visits once, refuses, and leaves it alone |
 | `AlphabetSoup.setSize(0.7)` / `AlphabetSoup.setSize('auto')` | Change the size while the page is open |
 | `AlphabetSoup.reset()` | Hire a new chef with an empty pot, even after the last one left |
 

@@ -1,6 +1,6 @@
 /*
  * Alphabet Soup
- * © 2026 Michael Phillipps / Butter Side Up (https://buttersideup.dev). MIT License.
+ * © 2026 Butter Side Up (https://buttersideup.dev). MIT License.
  *
  * A chef who pops up over whichever text box you click, sets a soup pot down on its edge,
  * and steals the first of every letter and number you type, leaving a space where each one
@@ -13,8 +13,12 @@
  * Add it to any page:   <script src="alphabet-soup.js"></script>
  *
  * - Works on <textarea> and on <input> boxes of type text, search, url and tel.
- *   Password, email and number boxes are left alone, and so is any box with
- *   data-alphabet-soup="off".
+ *   Password, email and number boxes are left alone.
+ * - data-alphabet-soup on a box, or on anything around it such as a <form> (the closest wins):
+ *     "off"      the chef stays away.
+ *     "decline"  the first time you click into a box there, the chef comes over, sniffs, says
+ *                "off duty, this one's important" and leaves without stealing anything. After
+ *                that it's treated as "off" until the page is reloaded. Good for contact forms.
  * - Size: by default the chef grows with the box's text (16px text gets the drawing at about 41%)
  *   and shrinks to fit narrow boxes. To choose a size, add
  *   data-size="0.7" to the script tag (1 is the full drawing, 0.5 half, 1.5 bigger),
@@ -102,6 +106,11 @@
     .stage.chewing .mouth-open { opacity: 1; animation: chew .15s ease-in-out 6 alternate; }
     .stage.chewing .mouth-closed { opacity: 0; }
     @keyframes chew { to { transform: scaleY(.15); } }
+    /* A sniff: the head lifts a little and the nose twitches. */
+    .stage.sniffing .bob { transform: translateY(-6px); }
+    .nose { transform-box: fill-box; transform-origin: 50% 100%; }
+    .stage.sniffing .nose { animation: sniff .2s ease-in-out 4 alternate; }
+    @keyframes sniff { to { transform: scale(1.15, .85) translateY(-1px); } }
     @keyframes blink { 0%, 94%, 100% { transform: scaleY(1); } 97% { transform: scaleY(.1); } }
 
     .pot { position: absolute; left: 3px; bottom: -2px; width: 64px; height: 90px; transform: translateY(${POT_HIDDEN}px); transform-origin: 50% 100%; pointer-events: auto; cursor: pointer; }
@@ -175,7 +184,7 @@
               <ellipse cx="86" cy="96" rx="8.5" ry="9.5" fill="#fff" stroke="${LINE}" stroke-width="1.5"/>
               <g class="pupil"><circle cx="86" cy="97" r="4.5" fill="#2a2233"/><circle cx="87.8" cy="95.2" r="1.5" fill="#fff"/></g>
             </g>
-            <ellipse cx="70" cy="108" rx="6.5" ry="5.5" fill="#e8a888"/>
+            <ellipse class="nose" cx="70" cy="108" rx="6.5" ry="5.5" fill="#e8a888"/>
             <path class="mouth-closed" d="M63 128 Q70 133 77 128" stroke="${LINE}" stroke-width="2.5" fill="none" stroke-linecap="round"/>
             <ellipse class="mouth-open" cx="70" cy="128" rx="6" ry="5" fill="#6b2b2b"/>
             <!-- mustache -->
@@ -241,9 +250,16 @@
   }
 
   function isTextBox(el) {
-    if (!el || el.readOnly || el.disabled || (el.dataset.alphabetSoup ?? el.dataset.letterThief) === 'off') return false;
+    if (!el || el.readOnly || el.disabled) return false;
     if (el instanceof HTMLTextAreaElement) return true;
     return el instanceof HTMLInputElement && BOX_TYPES.includes(el.type);
+  }
+
+  // What the page asked for: data-alphabet-soup on the box or its closest marked ancestor.
+  // Returns that element and its value ('off', 'decline', or anything else for normal).
+  function markingOf(box) {
+    const marked = box.closest('[data-alphabet-soup], [data-letter-thief]');
+    return { marked, mode: marked ? marked.dataset.alphabetSoup ?? marked.dataset.letterThief : '' };
   }
 
   // Sets a box's value the way the browser does, so frameworks that watch `value` notice.
@@ -292,6 +308,7 @@
     let wisps = [];                    // spilled characters still steaming in the box: { index, gone, el, until }
     const landing = { index: 0 };      // where the next spilled character goes into the box
     let busy = false, finished = false;
+    let declining = false;             // visiting a "decline" box, where nothing is stolen
     let introduced = false;            // screen readers hear who the chef is on the first arrival
     let untilSnack = nextSnack();      // thefts left before the chef eats one
     let scale = 1;                     // the chef's size on the current box
@@ -329,6 +346,18 @@
         settleOn(nextHome);
         await arrive();
       });
+    }
+
+    // Where the focus goes, the chef follows, unless the page says otherwise.
+    const declined = new WeakSet();    // "decline" elements the chef has already been to
+
+    function visit(box) {
+      if (!isTextBox(box)) return;
+      const { marked, mode } = markingOf(box);
+      if (mode === 'off' || declined.has(marked)) return;
+      if (mode !== 'decline') return requestMove(box);
+      declined.add(marked);
+      if (!finished) schedule(() => declineAt(box));
     }
 
     function requestWork() {
@@ -881,6 +910,30 @@
       await wait(ms(120));
     }
 
+    // A box marked "decline": the chef comes over without the pot, sniffs, says no and goes.
+    // Nothing typed here is ever stolen. With reduced motion only the bubble shows.
+    async function declineAt(box) {
+      if (home) await duckAway();
+      settleOn(box);
+      declining = true;
+      announce('The chef is off duty here.');
+      if (!reduceMotion) {
+        stage.classList.remove('away');
+        await wait(350);
+        stage.classList.add('sniffing');
+        await wait(800);
+        stage.classList.remove('sniffing');
+      }
+      say('off duty, this one\'s important', 2500);
+      await wait(2500);
+      stage.classList.add('away');
+      await wait(ms(300));                         // let the duck-down finish
+      stage.style.display = 'none';
+      boxWatcher.disconnect();
+      home = null;
+      declining = false;
+    }
+
     async function leaveForGood() {
       say('soup\'s ready! au revoir!', 2400);
       await wait(ms(1600));
@@ -932,8 +985,8 @@
       else if (!busy) followCaret();
     }
 
-    const onHome = e => e.target === home && !finished;
-    document.addEventListener('focusin', e => { if (isTextBox(e.target)) requestMove(e.target); });
+    const onHome = e => e.target === home && !finished && !declining;
+    document.addEventListener('focusin', e => visit(e.target));
     document.addEventListener('input', e => { if (onHome(e) && !e.isComposing) onEdit(); }, true);
     document.addEventListener('compositionend', e => { if (onHome(e)) onEdit(); }, true);
     document.addEventListener('click', e => { if (onHome(e) && !busy) followCaret(); }, true);
@@ -960,7 +1013,7 @@
       reach.classList.remove('on');
       pot.classList.remove('cooking');
       pot.style.transform = '';
-      if (isTextBox(document.activeElement)) requestMove(document.activeElement);
+      visit(document.activeElement);
     });
 
     // Poke the chef and they duck.
@@ -974,7 +1027,7 @@
     pot.addEventListener('mousedown', e => e.preventDefault());
     pot.addEventListener('click', requestSpill);
 
-    if (isTextBox(document.activeElement)) requestMove(document.activeElement);
+    visit(document.activeElement);
   }
 
   if (document.body) start();
