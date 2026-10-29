@@ -255,9 +255,13 @@
   function start() {
     if (document.getElementById('alphabet-soup')) return;     // script included twice
 
+    // The layer scrolls with the page, and its transform makes it the containing block for the
+    // fixed-position parts inside, which syncOrigin() lines up with the window. Plain fixed
+    // positioning drifts on iPhones: with the keyboard open, the window fixed things hang from
+    // isn't the one getBoundingClientRect measures in, so the chef slid off the box.
     const host = document.createElement('div');
     host.id = 'alphabet-soup';
-    host.setAttribute('style', 'all: initial; position: fixed; left: 0; top: 0; width: 0; height: 0; z-index: 2147483000; pointer-events: none;');
+    host.setAttribute('style', 'all: initial; position: absolute; left: 0; top: 0; width: 0; height: 0; transform: translate(0px, 0px); z-index: 2147483000; pointer-events: none;');
     const root = host.attachShadow({ mode: 'open' });
     root.innerHTML = `<style>${STYLE}</style>${MARKUP}`;
     document.body.append(host);
@@ -305,7 +309,7 @@
       busy = true;
       startTracking();
       chain = chain.then(async () => {
-        try { await task(); }
+        try { syncOrigin(); await task(); }
         catch (err) { console.error('[alphabet-soup]', err); }
         finally {
           busy = --queued > 0;
@@ -360,11 +364,23 @@
       return Math.max(MIN_AUTO_SIZE, Math.min(MAX_AUTO_SIZE, byText, width / SPAN_W));
     }
 
+    // Moves the layer so its corner sits at the window's corner as getBoundingClientRect sees
+    // it; everything inside is then placed in the same coordinates as the boxes it measures.
+    let originX = 0, originY = 0;
+    function syncOrigin() {
+      const r = host.getBoundingClientRect();
+      if (!r.left && !r.top) return;
+      originX -= r.left;
+      originY -= r.top;
+      host.style.transform = `translate(${originX}px, ${originY}px)`;
+    }
+
     // Pins the chef to the box's top edge. While the chef is busy or the box has focus this runs
     // every frame; otherwise only when something could have moved the box, so an idle page
     // costs nothing.
     function pinToBox() {
       if (!home) return;
+      syncOrigin();
       const r = home.getBoundingClientRect();
       scale = sizeFor(home, r.width);
       host.style.setProperty('--s', scale);
@@ -778,6 +794,7 @@
     }
 
     function drawWisps(now) {
+      syncOrigin();
       wisps = wisps.filter(wisp => {
         if (wisp.gone || now > wisp.until || !home) { wisp.el.remove(); return false; }
         const p = charPoint(home.value, wisp.index);
