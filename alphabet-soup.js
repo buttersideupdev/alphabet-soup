@@ -133,7 +133,7 @@
 
     /* Undoes the chef's scaling so the words stay readable at any size. */
     .bubble {
-      position: absolute; left: calc(var(--x) + 70px); bottom: 146px;
+      position: absolute; left: calc(var(--x) + 70px + var(--nudge, 0px)); bottom: 146px;
       padding: calc(6px / var(--s, 1)) calc(12px / var(--s, 1));
       border: calc(2.5px / var(--s, 1)) solid #2a2233; border-radius: calc(14px / var(--s, 1));
       background: #fff; color: #2a2233; font-size: calc(16px / var(--s, 1)); font-weight: 700; white-space: nowrap;
@@ -506,6 +506,7 @@
     function placeChef(left) {
       const width = home.getBoundingClientRect().width / scale;
       stage.style.setProperty('--x', Math.max(-10, Math.min(width - SPAN_W, left / scale)) + 'px');
+      fitBubble();
     }
 
     function lookAt(cx, cy) {
@@ -530,10 +531,31 @@
           lastQuip = text;
         }
         bubble.textContent = text;
-        bubble.classList.add('show');
+        if (bubble.classList.contains('show')) fitBubble();
+        else {
+          // Put it in place before it appears, so it pops up there instead of sliding over.
+          bubble.style.transition = 'none';
+          fitBubble();
+          bubble.offsetWidth;                      // apply that before the transition comes back
+          bubble.style.transition = '';
+          bubble.classList.add('show');
+        }
       }
       clearTimeout(bubbleTimer);
       bubbleTimer = setTimeout(() => bubble.classList.remove('show'), duration);
+    }
+
+    // The bubble is centred over the chef, so a long line can run off the screen when he's near
+    // its edge, as he often is on a phone. Shift it back in, keeping a small margin.
+    function fitBubble() {
+      if (!home) return;
+      const x = parseFloat(getComputedStyle(stage).getPropertyValue('--x'));
+      const centre = home.getBoundingClientRect().left + (x + 70) * scale;
+      const half = bubble.offsetWidth * scale / 2, margin = 8;
+      const room = document.documentElement.clientWidth;
+      // Too wide for the screen either way: line it up with the left edge.
+      const shift = Math.max(margin - (centre - half), Math.min(0, room - margin - (centre + half)));
+      bubble.style.setProperty('--nudge', shift / scale + 'px');
     }
 
     const describe = ch => /\d/.test(ch) ? 'number ' + ch : 'letter ' + ch.toUpperCase();
