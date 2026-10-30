@@ -53,6 +53,9 @@
   const TIP_ANGLE = 55;                // degrees the pot tips towards you when it's knocked over
   const MOUTH_OPEN = 2.6;              // how much rounder the rim looks, fully tipped
   const STEAM_MS = 2000;               // how long a spilled character steams in the box
+  // With reduced motion the chef stays put: each stolen character fades where it was typed, with
+  // a pause before the next, so he keeps an easy pace instead of racing through instant moves.
+  const CALM_FADE_MS = 450, CALM_PAUSE_MS = 600;
   const WISP = '<svg class="wisp" viewBox="0 0 20 30"><path d="M7 27 q-3 -5 0 -10 q3 -5 0 -10"/>' +
                '<path d="M13 27 q-3 -5 0 -10 q3 -5 0 -10"/></svg>';
   // With size "auto" the chef grows with the box's text: 16px text gets the drawing at about 41%.
@@ -635,16 +638,23 @@
       return letter;
     }
 
+    // With reduced motion a stolen character fades out where it is instead of flying anywhere.
+    const fadeOut = letter =>
+      letter.el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: CALM_FADE_MS, fill: 'forwards' });
+
     function dropInPot(letter) {
       const { x, y } = letter.pos;
       const fall = potRim().y - (y + letter.h * .5);
-      return letter.el.animate([
+      const flight = reduceMotion ? fadeOut(letter) : letter.el.animate([
         { transform: `translate(${x}px, ${y}px) rotate(${letter.tilt}deg)`, opacity: 1 },
         { transform: `translate(${x}px, ${y + fall}px) scale(.3)`, opacity: 0 },
-      ], { duration: ms(220), easing: 'ease-in', fill: 'forwards' }).finished.then(() => {
+      ], { duration: ms(220), easing: 'ease-in', fill: 'forwards' });
+      return flight.finished.then(() => {
         letter.el.remove();
-        soup.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.12, 1.8)' }, { transform: 'scale(1)' }],
-                     { duration: 300 });
+        if (!reduceMotion) {
+          soup.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.12, 1.8)' }, { transform: 'scale(1)' }],
+                       { duration: 300 });
+        }
         collected.set(letter.key, letter.ch);
         if (collected.size < WANTED.length) say();
       });
@@ -673,17 +683,29 @@
       say(SNACK_QUIPS[Math.floor(Math.random() * SNACK_QUIPS.length)], 1400);
       announce(`The chef ate the ${describe(letter.ch)}, so they'll steal another one.`);
       stage.classList.add('chewing');
-      return letter.el.animate([
+      const bite = reduceMotion ? fadeOut(letter) : letter.el.animate([
         { transform: `translate(${x}px, ${y}px) rotate(${letter.tilt}deg)`, opacity: 1 },
         { transform: `translate(${m.x - letter.w / 2}px, ${m.y - letter.h * .4}px) scale(.2)`, opacity: 0 },
-      ], { duration: ms(200), easing: 'ease-in', fill: 'forwards' }).finished.then(async () => {
+      ], { duration: ms(200), easing: 'ease-in', fill: 'forwards' });
+      return bite.finished.then(async () => {
         letter.el.remove();
         await wait(reduceMotion ? 1 : 900);       // chewing
         stage.classList.remove('chewing');
       });
     }
 
+    // Reduced motion: no walking or reaching. The character fades where it was typed, then a pause.
+    async function takeQuietly(job) {
+      const letter = job.gone ? null : pluck(job);
+      if (!letter && !job.gone) claimed.delete(job.key);   // it isn't where it should be; wait for the next one
+      targets = targets.filter(j => j !== job);
+      if (!letter) return say('hey!');
+      await (timeForASnack() ? eat(letter) : dropInPot(letter));
+      await wait(CALM_PAUSE_MS);
+    }
+
     async function reachFor(job) {
+      if (reduceMotion) return takeQuietly(job);
       placeChef(target(job).x - home.getBoundingClientRect().left - (SHOULDER_X - 14) * scale);
       stage.classList.add('reaching');
       reach.classList.add('on');
