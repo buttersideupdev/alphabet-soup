@@ -57,8 +57,8 @@ That's it. There are no dependencies, no build step and no styles to add.
 - **Polite.**
   - Screen readers hear each theft ("The chef stole the letter E"), snack and spill.
   - Clicking the pot doesn't take the focus out of your text box.
-  - "Reduce motion" is respected: the chef stays put, and each stolen character fades where it was
-    typed, one at a time at an easy pace.
+  - With "reduce motion" on, the chef moves almost instantly, and says so the first time he
+    pops up.
   - Text being composed with an input method is never interrupted.
   - The chef goes quiet when idle: no animation loop runs unless they're busy or their box has
     focus.
